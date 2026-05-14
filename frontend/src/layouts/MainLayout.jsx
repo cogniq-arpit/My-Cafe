@@ -8,6 +8,7 @@ import Navbar  from '../components/Navbar';
 import Footer  from '../components/Footer';
 import ChatBot from '../components/ChatBot';
 import CartDrawer from '../components/CartDrawer';
+import Toast from '../components/Toast';
 import useThemeStore from '../store/useThemeStore';
 
 export default function MainLayout() {
@@ -41,6 +42,7 @@ export default function MainLayout() {
       {!isAuth && <Footer />}
       {!isAuth && <ChatBot />}
       <CartDrawer />
+      <Toast />
     </div>
   );
 }

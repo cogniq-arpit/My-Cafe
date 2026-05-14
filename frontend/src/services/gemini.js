@@ -1,135 +1,93 @@
 /**
- * gemini.js — Gemini API Integration for MY Cafe
+ * gemini.js — Modern Gemini AI Integration using the unified @google/genai SDK (2026)
  */
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from "@google/genai";
 import { menuItems, specialOffers } from '../data/menuData';
 
-// Initialize Gemini SDK with the API Key from environment variables
+// Initialize Gemini SDK
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(apiKey || 'MOCK_KEY');
+const ai = new GoogleGenAI({
+  apiKey: apiKey === 'MOCK_KEY' ? undefined : apiKey
+});
 
-// Prepare the cafe context from our data
+// Prepare Context
 const menuContext = menuItems.map(item => `- ${item.name} (₹${item.price}): ${item.description}`).join('\n');
 const offersContext = specialOffers.map(offer => `- ${offer.title}: ${offer.description}`).join('\n');
 
 const SYSTEM_PROMPT = `
-You are the official AI assistant of MY Cafe.
-Your purpose is ONLY to help users with MY Cafe-related topics such as:
-* menu items
-* food recommendations
-* drinks
-* prices
-* reservations
-* opening hours
-* offers
-* customer assistance
+You are the official AI assistant of MY Cafe. 
+Help with menu, recommendations, and reservations.
+Keep it short, professional, and friendly. 
+PLAIN TEXT ONLY. No markdown.
 
-If a user asks anything unrelated to MY Cafe, politely refuse and redirect them back to cafe-related assistance.
-Keep responses:
-* short
-* friendly
-* professional
-* cafe-themed
-* use PLAIN TEXT ONLY. DO NOT use markdown formatting like **bold** or *italics*.
-
-Never behave like a general AI assistant or chatbot.
-
---- CAFE CONTEXT ---
-Address: 42, Cafe Lane, Bandra West, Mumbai - 400 050
-Phone: +91 98765 43210
-Hours: Mon-Fri: 8 AM - 10 PM, Sat-Sun: 9 AM - 11 PM
-Reservations: Available via our Contact page or phone.
-
---- MENU ---
+Address: 42, Cafe Lane, Bandra West, Mumbai
+Hours: 8 AM - 10 PM
+MENU:
 ${menuContext}
-
---- CURRENT OFFERS ---
+OFFERS:
 ${offersContext}
 `;
 
-// Primary and fallback models for 2026
+// Gemini Models (2026 Standards)
+// prioritized for reliability and quota
 const MODELS = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-  'gemini-2.5-flash'
+  'gemini-3.1-flash-lite', // Matches user's high-quota dashboard
+  'gemini-2.5-flash',      // Matches user's dashboard
+  'gemini-1.5-flash', 
+  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash-lite'
 ];
 
 /**
- * Helper to delay execution (backoff)
+ * Get response using the unified SDK with automatic fallback
  */
-const wait = (ms) => new Promise(res => setTimeout(res, ms));
+export async function getGeminiResponse(message, history = [], modelIndex = 0) {
+  if (modelIndex >= MODELS.length) {
+    return "I'm currently over my daily capacity across all available models. Please try again later! ☕";
+  }
 
-/**
- * Get response from Gemini with retries and model fallbacks
- */
-export async function getGeminiResponse(message, history = [], attempt = 0, modelIndex = 0) {
   try {
     if (!apiKey || apiKey === 'YOUR_API_KEY' || apiKey === 'MOCK_KEY') {
-      console.warn('Using mock AI fallback: No valid Gemini API Key found.');
-      await wait(1000);
-      return "I'm currently in demo mode. Please configure a valid VITE_GEMINI_API_KEY to enable my full AI capabilities!";
+      return "I'm currently in demo mode. Please set a valid VITE_GEMINI_API_KEY.";
     }
 
-    const currentModelName = MODELS[modelIndex] || MODELS[0];
-    const model = genAI.getGenerativeModel({
-      model: currentModelName,
-      systemInstruction: SYSTEM_PROMPT
-    });
+    const currentModel = MODELS[modelIndex];
 
-    // Format and clean history
-    const formattedHistory = history
-      .filter(msg => msg.text && msg.text.trim() !== "")
-      .map(msg => ({
-        role: msg.role === 'ai' ? 'model' : 'user',
-        parts: [{ text: msg.text }]
-      }));
-
-    // SDK requirement: History must start with a 'user' message
-    while (formattedHistory.length > 0 && formattedHistory[0].role === 'model') {
-      formattedHistory.shift();
-    }
-
-    const chat = model.startChat({
-      history: formattedHistory,
-      generationConfig: {
+    // Multi-turn chat using the new unified SDK syntax
+    const chat = ai.chats.create({
+      model: currentModel,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
         temperature: 0.7,
-        maxOutputTokens: 500,
-      }
+      },
+      history: history.slice(-8).map(m => ({
+        role: m.role === 'ai' ? 'model' : 'user',
+        content: m.text
+      }))
     });
 
-    const result = await chat.sendMessage(message);
-    let reply = result.response.text();
-
-    // Clean up response: Strip all markdown formatting (as per system prompt requirement)
-    return reply.replace(/\*\*/g, '').replace(/\*/g, '').replace(/__/g, '').trim();
+    const result = await chat.sendMessage({ message: message });
+    return result.text.replace(/\*/g, '').trim();
 
   } catch (error) {
-    console.error(`Gemini Error (${MODELS[modelIndex]}):`, error);
-
-    // Handle Quota (429) with exponential backoff
-    if (error.message?.includes('429') && attempt < 2) {
-      const delay = Math.pow(2, attempt) * 2000;
-      console.log(`Quota hit. Retrying in ${delay}ms... (Attempt ${attempt + 1})`);
-      await wait(delay);
-      return getGeminiResponse(message, history, attempt + 1, modelIndex);
+    const errorMsg = error.message?.toLowerCase() || '';
+    
+    // If rate limited or quota exceeded, try the next model
+    if (errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit')) {
+      console.warn(`Model ${MODELS[modelIndex]} limit reached. Falling back...`);
+      return getGeminiResponse(message, history, modelIndex + 1);
     }
 
-    // Handle Model Not Found (404) or continued failure by trying next model
-    if ((error.message?.includes('404') || error.message?.includes('429')) && modelIndex < MODELS.length - 1) {
-      console.log(`Switching to fallback model: ${MODELS[modelIndex + 1]}`);
-      return getGeminiResponse(message, history, 0, modelIndex + 1);
+    if (errorMsg.includes('invalid api key')) {
+      return "The AI API key appears to be invalid. Please check your .env file.";
     }
 
-    return "Sorry, I'm having a bit of trouble connecting to my brain right now. Please try again in a moment ☕";
+    return "I'm having a bit of trouble connecting right now. Please try again later ☕";
   }
 }
 
 export const suggestions = [
   "What coffee do you recommend?",
-  "Best combo under ₹300",
   "Today's special",
-  "Recommend desserts",
-  "What is your opening time?",
   "Reserve a table"
 ];

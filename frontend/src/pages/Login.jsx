@@ -6,15 +6,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, Globe } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
+import useToastStore from '../store/useToastStore';
 import Logo from '../components/Logo';
 
 export default function Login() {
   const [form,    setForm]    = useState({ email:'', password:'', remember: false });
   const [showPw,  setShowPw]  = useState(false);
-  const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuthStore();
+  const toast     = useToastStore();
   const navigate  = useNavigate();
   const location  = useLocation();
   const from = location.state?.from?.pathname || '/dashboard';
@@ -26,14 +27,17 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    if (!form.email || !form.password) { setError('Please fill in all fields.'); return; }
+    if (!form.email || !form.password) { 
+      toast.warning('Please fill in all fields.'); 
+      return; 
+    }
     setLoading(true);
     try {
       await login({ email: form.email, password: form.password });
+      toast.success('Welcome back to MY Cafe!');
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -51,12 +55,6 @@ export default function Login() {
             </div>
             <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] text-center mb-1">Welcome back</h1>
             <p className="text-[var(--text-muted)] text-sm text-center mb-7">Sign in to your MY Cafe account</p>
-
-            {error && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 text-sm text-center">
-                {error}
-              </div>
-            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}

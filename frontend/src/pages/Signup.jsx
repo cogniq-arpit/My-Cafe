@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { User, Mail, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
+import useToastStore from '../store/useToastStore';
 import Logo from '../components/Logo';
 
 function PasswordStrength({ password }) {
@@ -37,25 +38,34 @@ function PasswordStrength({ password }) {
 export default function Signup() {
   const [form,    setForm]    = useState({ name:'', email:'', password:'', confirm:'' });
   const [showPw,  setShowPw]  = useState(false);
-  const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuthStore();
+  const toast = useToastStore();
   const navigate = useNavigate();
 
   const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    if (!form.name || !form.email || !form.password) { setError('All fields are required.'); return; }
-    if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (!form.name || !form.email || !form.password) { 
+      toast.warning('All fields are required.'); 
+      return; 
+    }
+    if (form.password !== form.confirm) { 
+      toast.error('Passwords do not match.'); 
+      return; 
+    }
+    if (form.password.length < 6) { 
+      toast.warning('Password must be at least 6 characters.'); 
+      return; 
+    }
     setLoading(true);
     try {
       await register({ name: form.name, email: form.email, password: form.password });
+      toast.success('Account created! Welcome to the family ☕');
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -76,12 +86,6 @@ export default function Signup() {
             <div className="flex justify-center mb-6"><Logo size="md" /></div>
             <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] text-center mb-1">Create an account</h1>
             <p className="text-[var(--text-muted)] text-sm text-center mb-7">Join the MY Cafe family today ☕</p>
-
-            {error && (
-              <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 text-sm text-center">
-                {error}
-              </div>
-            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {FIELDS.map(f => (

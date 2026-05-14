@@ -1,42 +1,66 @@
 /**
  * Dashboard.jsx — User profile dashboard (protected route)
  */
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ShoppingBag, Heart, Sparkles, MapPin, Calendar, Star, LogOut } from 'lucide-react';
+import { ShoppingBag, Heart, Sparkles, MapPin, Calendar, Star, LogOut, Loader2 } from 'lucide-react';
 import useAuthStore  from '../store/useAuthStore';
 import useCartStore  from '../store/useCartStore';
 import { menuItems } from '../data/menuData';
 import { Link, useNavigate } from 'react-router-dom';
-
-const RECENT_ORDERS = [
-  { id:'ord1', date:'12 May 2026', items:'Cappuccino × 2, Tiramisu × 1', total:589, status:'Delivered' },
-  { id:'ord2', date:'08 May 2026', items:'Paneer Tikka Pizza, Mango Lassi', total:479, status:'Delivered' },
-  { id:'ord3', date:'01 May 2026', items:"Student Special, Cold Brew", total:358, status:'Delivered' },
-];
-
-const SAVED_ADDRESSES = [
-  { id:1, label:'Home',   address:'42, Shivaji Nagar, Pune – 411005' },
-  { id:2, label:'Office', address:'Level 3, Cyber Park, Bandra Kurla Complex, Mumbai' },
-];
-
-const RESERVATIONS = [
-  { id:1, date:'15 May 2026', time:'7:30 PM', guests:2, status:'Confirmed' },
-  { id:2, date:'22 May 2026', time:'1:00 PM', guests:4, status:'Pending'   },
-];
+import { db } from '../services/database';
 
 const favoriteIds = [3, 11, 20, 33];
 const favorites   = menuItems.filter(i => favoriteIds.includes(i.id));
 const aiRecs      = menuItems.filter(i => i.popular && !favoriteIds.includes(i.id)).slice(0, 3);
 
-const statusColor = { Delivered:'bg-green-100 text-green-600 dark:bg-green-900/30', Confirmed:'bg-blue-100 text-blue-600 dark:bg-blue-900/30', Pending:'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' };
+const statusColor = { 
+  Delivered: 'bg-green-100 text-green-600 dark:bg-green-900/30', 
+  Confirmed: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30', 
+  Pending: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' 
+};
 
 export default function Dashboard() {
   const { user, logout }   = useAuthStore();
-  const cartItems          = useCartStore(s => s.items);
   const addItem            = useCartStore(s => s.addItem);
   const navigate           = useNavigate();
 
+  const [orders, setOrders] = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!user?.id) return;
+      setLoading(true);
+      try {
+        const [o, r, a] = await Promise.all([
+          db.getOrders(user.id),
+          db.getReservations(user.id),
+          db.getAddresses(user.id)
+        ]);
+        setOrders(o);
+        setReservations(r);
+        setAddresses(a);
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [user]);
+
   const handleLogout = () => { logout(); navigate('/'); };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-secondary)]">
+        <Loader2 className="w-10 h-10 text-cafe-warm animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrapper pt-20 pb-16 bg-[var(--bg-secondary)] min-h-screen">
@@ -68,16 +92,18 @@ export default function Dashboard() {
                 <ShoppingBag size={18} className="text-cafe-warm" /> Recent Orders
               </h2>
               <div className="space-y-3">
-                {RECENT_ORDERS.map(o => (
+                {orders.length > 0 ? orders.map(o => (
                   <div key={o.id} className="flex items-start justify-between p-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)]">
                     <div>
-                      <p className="text-xs text-[var(--text-muted)] mb-0.5">{o.date}</p>
+                      <p className="text-xs text-[var(--text-muted)] mb-0.5">{new Date(o.created_at).toLocaleDateString()}</p>
                       <p className="text-sm text-[var(--text-primary)] font-medium">{o.items}</p>
                       <p className="text-sm text-cafe-warm font-bold mt-1">₹{o.total}</p>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColor[o.status]}`}>{o.status}</span>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColor[o.status] || statusColor.Delivered}`}>{o.status}</span>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-[var(--text-muted)] text-center py-4">No recent orders yet ☕</p>
+                )}
               </div>
             </motion.div>
 
@@ -145,12 +171,14 @@ export default function Dashboard() {
                 <MapPin size={16} className="text-cafe-warm" /> Saved Addresses
               </h2>
               <div className="space-y-3">
-                {SAVED_ADDRESSES.map(a => (
+                {addresses.length > 0 ? addresses.map(a => (
                   <div key={a.id} className="p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)]">
                     <p className="text-xs font-bold text-cafe-warm mb-0.5">{a.label}</p>
                     <p className="text-xs text-[var(--text-muted)]">{a.address}</p>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-xs text-[var(--text-muted)] text-center py-2">No addresses saved yet.</p>
+                )}
               </div>
             </motion.div>
 
@@ -161,15 +189,17 @@ export default function Dashboard() {
                 <Calendar size={16} className="text-cafe-warm" /> Reservations
               </h2>
               <div className="space-y-3">
-                {RESERVATIONS.map(r => (
+                {reservations.length > 0 ? reservations.map(r => (
                   <div key={r.id} className="p-3 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)] flex justify-between items-start">
                     <div>
-                      <p className="text-xs font-semibold text-[var(--text-primary)]">{r.date} · {r.time}</p>
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">{new Date(r.date).toLocaleDateString()} · {r.time}</p>
                       <p className="text-xs text-[var(--text-muted)]">{r.guests} guests</p>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[r.status]}`}>{r.status}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[r.status] || statusColor.Confirmed}`}>{r.status}</span>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-xs text-[var(--text-muted)] text-center py-2">No upcoming reservations.</p>
+                )}
               </div>
             </motion.div>
           </div>
