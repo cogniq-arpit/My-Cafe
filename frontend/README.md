@@ -177,7 +177,7 @@ Click the **sun/moon icon** in the navbar to toggle themes. Preference is persis
 
 - [ ] Real backend API integration (FastAPI / Node.js)
 - [ ] Real payment gateway (Razorpay)
-- [ ] Real AI via OpenAI / Gemini API
+- [x] Real AI via Gemini API
 - [ ] Push notifications for order updates
 - [ ] PWA offline support
 

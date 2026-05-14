@@ -9,11 +9,11 @@ import { getGeminiResponse, suggestions } from '../services/gemini';
 const WELCOME = "Hello! Welcome to MY Cafe ☕ I'm your official AI assistant. Ask me about our menu, reservations, special offers, or anything else!";
 
 export default function ChatBot() {
-  const [open,     setOpen]     = useState(false);
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: 'ai', text: WELCOME }]);
-  const [input,    setInput]    = useState('');
-  const [typing,   setTyping]   = useState(false);
-  const bottomRef  = useRef(null);
+  const [input, setInput] = useState('');
+  const [typing, setTyping] = useState(false);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -22,17 +22,21 @@ export default function ChatBot() {
   const send = async (text) => {
     const userMsg = text || input.trim();
     if (!userMsg) return;
-    
+
     setInput('');
     const newMessages = [...messages, { role: 'user', text: userMsg }];
     setMessages(newMessages);
     setTyping(true);
-    
-    // Pass the message history (excluding the current user message being sent)
-    const reply = await getGeminiResponse(userMsg, messages);
-    
-    setTyping(false);
-    setMessages([...newMessages, { role: 'ai', text: reply }]);
+
+    try {
+      // Pass the message history
+      const reply = await getGeminiResponse(userMsg, messages);
+      setMessages([...newMessages, { role: 'ai', text: reply }]);
+    } catch (err) {
+      console.error("ChatBot error:", err);
+    } finally {
+      setTyping(false);
+    }
   };
 
   return (
@@ -47,8 +51,8 @@ export default function ChatBot() {
       >
         <AnimatePresence mode="wait">
           {open
-            ? <motion.span key="x"    initial={{ rotate: -90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:90, opacity:0 }}><X size={22} /></motion.span>
-            : <motion.span key="chat" initial={{ rotate:  90, opacity:0 }} animate={{ rotate:0, opacity:1 }} exit={{ rotate:-90,opacity:0 }}><MessageCircle size={22} /></motion.span>
+            ? <motion.span key="x" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}><X size={22} /></motion.span>
+            : <motion.span key="chat" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}><MessageCircle size={22} /></motion.span>
           }
         </AnimatePresence>
       </motion.button>
@@ -58,8 +62,8 @@ export default function ChatBot() {
         {open && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0,  scale: 1    }}
-            exit={{    opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
             className="fixed bottom-24 left-6 z-[90] w-80 sm:w-96 glass rounded-3xl shadow-warm-xl border border-[var(--border)] flex flex-col overflow-hidden"
             style={{ maxHeight: '70vh' }}
           >
@@ -100,12 +104,12 @@ export default function ChatBot() {
 
               {/* Typing indicator */}
               {typing && (
-                <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="flex gap-2 items-center">
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2 items-center">
                   <div className="w-7 h-7 rounded-full bg-cafe-brown flex items-center justify-center">
                     <Bot size={13} className="text-white" />
                   </div>
                   <div className="bg-[var(--bg-secondary)] px-4 py-3 rounded-2xl rounded-tl-sm flex gap-1">
-                    {[0,1,2].map(i => <span key={i} className="w-1.5 h-1.5 bg-cafe-warm rounded-full animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />)}
+                    {[0, 1, 2].map(i => <span key={i} className="w-1.5 h-1.5 bg-cafe-warm rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
                   </div>
                 </motion.div>
               )}
@@ -115,7 +119,7 @@ export default function ChatBot() {
             {/* Quick Suggestions */}
             {messages.length <= 2 && (
               <div className="px-4 py-2 bg-[var(--bg-primary)] border-t border-[var(--border)] flex gap-2 overflow-x-auto no-scrollbar">
-                {suggestions.slice(0,3).map(s => (
+                {suggestions.slice(0, 3).map(s => (
                   <button key={s} onClick={() => send(s)}
                     className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full bg-cafe-brown/10 text-cafe-brown dark:text-cafe-warm hover:bg-cafe-brown hover:text-white transition-all duration-200 font-medium">
                     {s}
